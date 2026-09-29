@@ -2,95 +2,197 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>SLM Assistant</title>
-  <!-- Load marked.js to parse markdown -->
+  <title>SLM Chatbox</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 650px; margin: 40px auto; padding: 0 16px; }
-    input[type="password"] { width: 100%; padding: 8px; margin-bottom: 12px; box-sizing: border-box; }
-    textarea { width: 100%; height: 80px; padding: 8px; box-sizing: border-box; }
-    button { margin-top: 8px; padding: 8px 16px; cursor: pointer; }
-    
-    /* Removed white-space: pre-wrap so rendered HTML tags control formatting cleanly */
-    #output { 
-      margin-top: 16px; 
-      padding: 16px; 
-      border: 1px solid #ccc; 
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .chat-container {
+      width: 100%;
+      max-width: 650px;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      display: flex;
+      flex-direction: column;
+      height: 85vh;
+      overflow: hidden;
+    }
+    .chat-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fafafa;
+    }
+    .chat-header h3 { margin: 0; font-size: 1.1rem; color: #111827; }
+    .clear-btn {
+      background: transparent;
+      border: 1px solid #d1d5db;
+      padding: 6px 12px;
       border-radius: 6px;
-      min-height: 50px; 
-      background: #fdfdfd; 
-      line-height: 1.6;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: #4b5563;
     }
-    #output p:first-child { margin-top: 0; }
-    #output p:last-child { margin-bottom: 0; }
-    #output pre { 
-      background: #f0f0f0; 
-      padding: 10px; 
-      border-radius: 4px; 
-      overflow-x: auto; 
+    .clear-btn:hover { background: #f3f4f6; color: #111827; }
+
+    .chat-log {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
-    #output code { 
-      font-family: monospace; 
-      background: #eee; 
-      padding: 2px 4px; 
-      border-radius: 3px; 
+    .message {
+      max-width: 80%;
+      padding: 10px 14px;
+      border-radius: 10px;
+      line-height: 1.5;
+      font-size: 0.95rem;
+      word-break: break-word;
     }
-    #output pre code { background: none; padding: 0; }
-    #output blockquote {
-      border-left: 4px solid #ddd;
-      margin: 8px 0;
-      padding-left: 12px;
-      color: #666;
+    .message.user {
+      align-self: flex-end;
+      background: #2563eb;
+      color: #ffffff;
+      border-bottom-right-radius: 2px;
     }
+    .message.assistant {
+      align-self: flex-start;
+      background: #f3f4f6;
+      color: #1f2937;
+      border-bottom-left-radius: 2px;
+    }
+
+    /* Markdown elements styling inside assistant messages */
+    .message.assistant p:first-child { margin-top: 0; }
+    .message.assistant p:last-child { margin-bottom: 0; }
+    .message.assistant pre {
+      background: #e5e7eb;
+      padding: 8px;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+    .message.assistant code {
+      font-family: monospace;
+      background: #e5e7eb;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .message.assistant pre code { background: none; padding: 0; }
+
+    .chat-input-area {
+      padding: 12px 16px;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      gap: 8px;
+      background: #ffffff;
+    }
+    .chat-input-area textarea {
+      flex: 1;
+      resize: none;
+      height: 44px;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      outline: none;
+    }
+    .chat-input-area textarea:focus { border-color: #2563eb; }
+    .send-btn {
+      padding: 0 18px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .send-btn:disabled { background: #93c5fd; cursor: not-allowed; }
   </style>
 </head>
 <body>
-  <h3>Ask Small Language Model</h3>
 
-  <label for="pwdInput">Password (if enabled):</label>
-  <input type="password" id="pwdInput" placeholder="Enter access password" />
+  <div class="chat-container">
+    <div class="chat-header">
+      <h3>SLM Assistant</h3>
+      <button class="clear-btn" onclick="clearHistory()">Reset Memory</button>
+    </div>
 
-  <textarea id="promptInput" placeholder="Ask anything..."></textarea>
-  <button id="sendBtn" onclick="askModel()">Send</button>
+    <div class="chat-log" id="chatLog">
+      <div class="message assistant">Hello! What can I help you with today?</div>
+    </div>
 
-  <div id="output">Output will appear here...</div>
+    <div class="chat-input-area">
+      <textarea id="promptInput" placeholder="Type a message... (Press Enter to send)" rows="1"></textarea>
+      <button id="sendBtn" class="send-btn" onclick="sendMessage()">Send</button>
+    </div>
+  </div>
 
   <script>
     const WORKER_URL = "https://llama-3b-test.htrussell.workers.dev";
 
-    async function askModel() {
-      const prompt = document.getElementById("promptInput").value.trim();
-      const password = document.getElementById("pwdInput").value.trim();
-      const output = document.getElementById("output");
-      const btn = document.getElementById("sendBtn");
+    // Manage a persistent session UUID for memory tracking
+    let sessionId = localStorage.getItem("slm_session_id");
+    if (!sessionId) {
+      sessionId = crypto.randomUUID();
+      localStorage.setItem("slm_session_id", sessionId);
+    }
 
+    const chatLog = document.getElementById("chatLog");
+    const promptInput = document.getElementById("promptInput");
+    const sendBtn = document.getElementById("sendBtn");
+
+    // Allow Enter key to submit
+    promptInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    async function sendMessage() {
+      const prompt = promptInput.value.trim();
       if (!prompt) return;
 
-      btn.disabled = true;
-      output.innerHTML = "<em>Generating response...</em>";
+      // 1. Append User Message
+      appendMessage("user", prompt);
+      promptInput.value = "";
+      sendBtn.disabled = true;
+
+      // 2. Prepare Assistant Message Placeholder
+      const assistantMessageElem = appendMessage("assistant", "<em>Thinking...</em>");
+      chatLog.scrollTop = chatLog.scrollHeight;
 
       try {
-        const headers = { "Content-Type": "application/json" };
-        if (password) {
-          headers["x-access-key"] = password;
-        }
-
         const res = await fetch(WORKER_URL, {
           method: "POST",
-          headers: headers,
-          body: JSON.stringify({ prompt }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, sessionId }),
         });
 
         if (!res.ok) {
-          const errData = await res.json().catch(() => ({ error: res.statusText }));
-          output.textContent = `Error (${res.status}): ${errData.error || "Request failed"}`;
+          const err = await res.json().catch(() => ({ error: res.statusText }));
+          assistantMessageElem.textContent = `Error: ${err.error || "Request failed"}`;
           return;
         }
 
+        // 3. Read Streamed Chunks
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
-        let rawMarkdown = "";
+        let accumulatedMarkdown = "";
 
         while (true) {
           const { done, value } = await reader.read();
@@ -110,20 +212,43 @@
             try {
               const parsed = JSON.parse(dataStr);
               if (parsed.response) {
-                rawMarkdown += parsed.response;
-                // Re-render HTML from markdown as chunks arrive
-                output.innerHTML = marked.parse(rawMarkdown);
+                accumulatedMarkdown += parsed.response;
+                assistantMessageElem.innerHTML = marked.parse(accumulatedMarkdown);
+                chatLog.scrollTop = chatLog.scrollHeight;
               }
-            } catch {
-              // Ignore partial JSON chunks until full line arrives
-            }
+            } catch {}
           }
         }
       } catch (err) {
-        output.textContent = `Network Error: ${err.message}`;
+        assistantMessageElem.textContent = `Network Error: ${err.message}`;
       } finally {
-        btn.disabled = false;
+        sendBtn.disabled = false;
+        promptInput.focus();
       }
+    }
+
+    function appendMessage(role, content) {
+      const div = document.createElement("div");
+      div.className = `message ${role}`;
+      div.innerHTML = content;
+      chatLog.appendChild(div);
+      chatLog.scrollTop = chatLog.scrollHeight;
+      return div;
+    }
+
+    async function clearHistory() {
+      try {
+        await fetch(WORKER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, action: "clear" }),
+        });
+      } catch {}
+
+      // Reset frontend state
+      sessionId = crypto.randomUUID();
+      localStorage.setItem("slm_session_id", sessionId);
+      chatLog.innerHTML = `<div class="message assistant">Memory cleared! How can I help you now?</div>`;
     }
   </script>
 </body>
