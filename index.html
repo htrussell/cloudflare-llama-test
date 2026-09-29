@@ -26,14 +26,30 @@
       overflow: hidden;
     }
     .chat-header {
-      padding: 14px 18px;
+      padding: 12px 16px;
       border-bottom: 1px solid #e5e7eb;
       display: flex;
       justify-content: space-between;
       align-items: center;
       background: #fafafa;
+      gap: 10px;
+      flex-wrap: wrap;
     }
     .chat-header h3 { margin: 0; font-size: 1.1rem; color: #111827; }
+    .header-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .pwd-input {
+      padding: 6px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      width: 150px;
+      outline: none;
+    }
+    .pwd-input:focus { border-color: #2563eb; }
     .clear-btn {
       background: transparent;
       border: 1px solid #d1d5db;
@@ -42,6 +58,7 @@
       cursor: pointer;
       font-size: 0.85rem;
       color: #4b5563;
+      white-space: nowrap;
     }
     .clear-btn:hover { background: #f3f4f6; color: #111827; }
 
@@ -74,7 +91,6 @@
       border-bottom-left-radius: 2px;
     }
 
-    /* Markdown elements styling inside assistant messages */
     .message.assistant p:first-child { margin-top: 0; }
     .message.assistant p:last-child { margin-bottom: 0; }
     .message.assistant pre {
@@ -127,7 +143,16 @@
   <div class="chat-container">
     <div class="chat-header">
       <h3>SLM Assistant</h3>
-      <button class="clear-btn" onclick="clearHistory()">Reset Memory</button>
+      <div class="header-actions">
+        <input 
+          type="password" 
+          id="pwdInput" 
+          class="pwd-input" 
+          placeholder="Password (if enabled)" 
+          autocomplete="current-password"
+        />
+        <button class="clear-btn" onclick="clearHistory()">Reset Memory</button>
+      </div>
     </div>
 
     <div class="chat-log" id="chatLog">
@@ -143,7 +168,7 @@
   <script>
     const WORKER_URL = "https://llama-3b-test.htrussell.workers.dev";
 
-    // Manage a persistent session UUID for memory tracking
+    // Track a persistent session ID
     let sessionId = localStorage.getItem("slm_session_id");
     if (!sessionId) {
       sessionId = crypto.randomUUID();
@@ -152,9 +177,19 @@
 
     const chatLog = document.getElementById("chatLog");
     const promptInput = document.getElementById("promptInput");
+    const pwdInput = document.getElementById("pwdInput");
     const sendBtn = document.getElementById("sendBtn");
 
-    // Allow Enter key to submit
+    // Pre-fill password if previously saved in session
+    const savedPassword = sessionStorage.getItem("slm_access_key");
+    if (savedPassword) {
+      pwdInput.value = savedPassword;
+    }
+
+    pwdInput.addEventListener("input", () => {
+      sessionStorage.setItem("slm_access_key", pwdInput.value.trim());
+    });
+
     promptInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -162,33 +197,39 @@
       }
     });
 
+    function getHeaders() {
+      const headers = { "Content-Type": "application/json" };
+      const password = pwdInput.value.trim();
+      if (password) {
+        headers["x-access-key"] = password;
+      }
+      return headers;
+    }
+
     async function sendMessage() {
       const prompt = promptInput.value.trim();
       if (!prompt) return;
 
-      // 1. Append User Message
       appendMessage("user", prompt);
       promptInput.value = "";
       sendBtn.disabled = true;
 
-      // 2. Prepare Assistant Message Placeholder
       const assistantMessageElem = appendMessage("assistant", "<em>Thinking...</em>");
       chatLog.scrollTop = chatLog.scrollHeight;
 
       try {
         const res = await fetch(WORKER_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getHeaders(),
           body: JSON.stringify({ prompt, sessionId }),
         });
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: res.statusText }));
-          assistantMessageElem.textContent = `Error: ${err.error || "Request failed"}`;
+          assistantMessageElem.textContent = `Error (${res.status}): ${err.error || "Request failed"}`;
           return;
         }
 
-        // 3. Read Streamed Chunks
         const reader = res.body.getReader();
         const decoder = new TextDecoder("utf-8");
         let buffer = "";
@@ -240,12 +281,11 @@
       try {
         await fetch(WORKER_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getHeaders(),
           body: JSON.stringify({ sessionId, action: "clear" }),
         });
       } catch {}
 
-      // Reset frontend state
       sessionId = crypto.randomUUID();
       localStorage.setItem("slm_session_id", sessionId);
       chatLog.innerHTML = `<div class="message assistant">Memory cleared! How can I help you now?</div>`;
