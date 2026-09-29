@@ -34,7 +34,7 @@
       if (!prompt) return;
 
       btn.disabled = true;
-      output.textContent = "Generating response...";
+      output.textContent = "";
 
       try {
         const headers = { "Content-Type": "application/json" };
@@ -48,11 +48,43 @@
           body: JSON.stringify({ prompt }),
         });
 
-        const data = await res.json();
         if (!res.ok) {
-          output.textContent = `Error (${res.status}): ${data.error}`;
-        } else {
-          output.textContent = data.response;
+          const errData = await res.json().catch(() => ({ error: res.statusText }));
+          output.textContent = `Error (${res.status}): ${errData.error || "Request failed"}`;
+          return;
+        }
+
+        // Read the streaming response chunk by chunk
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+
+          // Retain any incomplete trailing line in the buffer
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith("data:")) continue;
+
+            const dataStr = trimmed.replace(/^data:\s*/, "");
+            if (dataStr === "[DONE]") continue;
+
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.response) {
+                output.textContent += parsed.response;
+              }
+            } catch {
+              // Ignore partial JSON chunks until full line arrives
+            }
+          }
         }
       } catch (err) {
         output.textContent = `Network Error: ${err.message}`;
