@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>SLM Assistant</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 16px; }
+    input[type="password"] { width: 100%; padding: 8px; margin-bottom: 12px; box-sizing: border-box; }
+    textarea { width: 100%; height: 80px; padding: 8px; box-sizing: border-box; }
+    button { margin-top: 8px; padding: 8px 16px; cursor: pointer; }
+    #output { margin-top: 16px; padding: 12px; border: 1px solid #ccc; min-height: 50px; white-space: pre-wrap; background: #fdfdfd; }
+  </style>
+</head>
+<body>
+  <h3>Ask Small Language Model</h3>
+
+  <label for="pwdInput">Password (if enabled):</label>
+  <input type="password" id="pwdInput" placeholder="Enter access password" />
+
+  <textarea id="promptInput" placeholder="Ask anything..."></textarea>
+  <button id="sendBtn" onclick="askModel()">Send</button>
+
+  <div id="output">Output will appear here...</div>
+
+  <script>
+    const WORKER_URL = "https://your-worker-name.your-account.workers.dev";
+
+    async function askModel() {
+      const prompt = document.getElementById("promptInput").value.trim();
+      const password = document.getElementById("pwdInput").value.trim();
+      const output = document.getElementById("output");
+      const btn = document.getElementById("sendBtn");
+
+      if (!prompt) return;
+
+      btn.disabled = true;
+      output.textContent = "Generating response...";
+
+      try {
+        const headers = { "Content-Type": "application/json" };
+        if (password) {
+          headers["x-access-key"] = password;
+        }
+
+        const res = await fetch(WORKER_URL, {
+          method: "POST",
+          headers: headers,
+          body: JSON.stringify({ prompt }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          output.textContent = `Error (${res.status}): ${data.error}`;
+        } else {
+          output.textContent = data.response;
+        }
+      } catch (err) {
+        output.textContent = `Network Error: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
